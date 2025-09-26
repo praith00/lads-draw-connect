@@ -10,6 +10,7 @@ import { Session } from "@supabase/supabase-js";
 import { AuthPage } from "@/components/Auth/AuthPage";
 import { HomePage } from "@/pages/HomePage";
 import { PlayPageWithRoom } from "@/pages/PlayPageWithRoom";
+import { CustomPlayPage } from "@/pages/CustomPlayPage";
 import { PlayOptions } from "@/components/PlayOptions";
 import { AccountPage } from "@/pages/AccountPage";
 import { HistoryPageNew } from "@/pages/HistoryPageNew";
@@ -73,6 +74,7 @@ const App = () => {
               <>
                 <Route path="/" element={<HomePage onLogout={handleLogout} />} />
                 <Route path="/play-options" element={<PlayOptions />} />
+                <Route path="/play/custom" element={<CustomPlayPage />} />
                 <Route path="/play/:roomCode" element={<PlayPageWithRoom />} />
                 <Route path="/account" element={<AccountPage />} />
                 <Route path="/history" element={<HistoryPageNew />} />

@@ -4,13 +4,13 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Users, Shuffle, UserPlus, Plus } from "lucide-react";
+import { ArrowLeft, Users, Shuffle, UserPlus, Plus, GamepadIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export const PlayOptions = () => {
   const navigate = useNavigate();
-  const [selectedOption, setSelectedOption] = useState<"random" | "friends" | null>(null);
+  const [selectedOption, setSelectedOption] = useState<"random" | "friends" | "custom" | null>(null);
   const [friendOption, setFriendOption] = useState<"join" | "create" | null>(null);
   const [roomCode, setRoomCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,30 +23,57 @@ export const PlayOptions = () => {
   const handleRandomMatch = async () => {
     setLoading(true);
     try {
-      // Look for available rooms with waiting status
-      const { data: availableRooms, error: queryError } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Look for available rooms with waiting status, excluding rooms the user is already in
+      const { data: userRooms } = await supabase
+        .from('room_participants')
+        .select('room_id')
+        .eq('user_id', user.id);
+      
+      const userRoomIds = userRooms?.map(r => r.room_id) || [];
+      
+      let query = supabase
         .from('rooms')
         .select('*')
         .eq('status', 'waiting')
         .lt('current_players', 2)
-        .limit(1);
+        .neq('creator_id', user.id);
+        
+      if (userRoomIds.length > 0) {
+        query = query.not('id', 'in', `(${userRoomIds.join(',')})`);
+      }
+      
+      const { data: availableRooms, error: queryError } = await query.limit(1);
 
       if (queryError) throw queryError;
 
       if (availableRooms && availableRooms.length > 0) {
         // Join existing room
         const room = availableRooms[0];
-        const { error: joinError } = await supabase
+        
+        // Check if user is already a participant
+        const { data: existingParticipant } = await supabase
           .from('room_participants')
-          .insert({ room_id: room.id, user_id: (await supabase.auth.getUser()).data.user?.id });
+          .select('id')
+          .eq('room_id', room.id)
+          .eq('user_id', user.id)
+          .single();
 
-        if (joinError) throw joinError;
+        if (!existingParticipant) {
+          const { error: joinError } = await supabase
+            .from('room_participants')
+            .insert({ room_id: room.id, user_id: user.id });
 
-        // Update room player count
-        await supabase
-          .from('rooms')
-          .update({ current_players: 2, status: 'active' })
-          .eq('id', room.id);
+          if (joinError) throw joinError;
+
+          // Update room player count
+          await supabase
+            .from('rooms')
+            .update({ current_players: 2, status: 'active' })
+            .eq('id', room.id);
+        }
 
         navigate(`/play/${room.room_code}`);
       } else {
@@ -58,7 +85,7 @@ export const PlayOptions = () => {
           .from('rooms')
           .insert({
             room_code: roomCodeData,
-            creator_id: (await supabase.auth.getUser()).data.user?.id,
+            creator_id: user.id,
             status: 'waiting'
           })
           .select()
@@ -69,7 +96,7 @@ export const PlayOptions = () => {
         // Add creator as participant
         await supabase
           .from('room_participants')
-          .insert({ room_id: newRoom.id, user_id: (await supabase.auth.getUser()).data.user?.id });
+          .insert({ room_id: newRoom.id, user_id: user.id });
 
         toast({
           title: "Waiting for match...",
@@ -94,6 +121,9 @@ export const PlayOptions = () => {
 
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       // Find room by code
       const { data: room, error: findError } = await supabase
         .from('rooms')
@@ -119,21 +149,31 @@ export const PlayOptions = () => {
         return;
       }
 
-      // Join room
-      const { error: joinError } = await supabase
+      // Check if user is already a participant
+      const { data: existingParticipant } = await supabase
         .from('room_participants')
-        .insert({ room_id: room.id, user_id: (await supabase.auth.getUser()).data.user?.id });
+        .select('id')
+        .eq('room_id', room.id)
+        .eq('user_id', user.id)
+        .single();
 
-      if (joinError) throw joinError;
+      if (!existingParticipant) {
+        // Join room
+        const { error: joinError } = await supabase
+          .from('room_participants')
+          .insert({ room_id: room.id, user_id: user.id });
 
-      // Update room player count
-      await supabase
-        .from('rooms')
-        .update({ 
-          current_players: room.current_players + 1,
-          status: room.current_players + 1 >= room.max_players ? 'active' : 'waiting'
-        })
-        .eq('id', room.id);
+        if (joinError) throw joinError;
+
+        // Update room player count
+        await supabase
+          .from('rooms')
+          .update({ 
+            current_players: room.current_players + 1,
+            status: room.current_players + 1 >= room.max_players ? 'active' : 'waiting'
+          })
+          .eq('id', room.id);
+      }
 
       navigate(`/play/${room.room_code}`);
     } catch (error: any) {
@@ -150,6 +190,9 @@ export const PlayOptions = () => {
   const handleCreateRoom = async () => {
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       const { data: roomCodeData, error: roomCodeError } = await supabase.rpc('generate_room_code');
       if (roomCodeError) throw roomCodeError;
 
@@ -157,7 +200,7 @@ export const PlayOptions = () => {
         .from('rooms')
         .insert({
           room_code: roomCodeData,
-          creator_id: (await supabase.auth.getUser()).data.user?.id,
+          creator_id: user.id,
           status: 'waiting'
         })
         .select()
@@ -168,7 +211,7 @@ export const PlayOptions = () => {
       // Add creator as participant
       await supabase
         .from('room_participants')
-        .insert({ room_id: newRoom.id, user_id: (await supabase.auth.getUser()).data.user?.id });
+        .insert({ room_id: newRoom.id, user_id: user.id });
 
       toast({
         title: "Room created!",
@@ -211,7 +254,7 @@ export const PlayOptions = () => {
           </div>
 
           {!selectedOption && (
-            <div className="grid md:grid-cols-2 gap-8 animate-fade-in">
+            <div className="grid md:grid-cols-3 gap-8 animate-fade-in">
               <Card 
                 className="p-8 shadow-floating bg-gradient-card border-glass backdrop-blur-sm cursor-pointer hover:scale-105 transition-spring group"
                 onClick={() => setSelectedOption("random")}
@@ -238,6 +281,21 @@ export const PlayOptions = () => {
                   <h2 className="text-2xl font-bold mb-4">With Friends</h2>
                   <p className="text-muted-foreground">
                     Create a room or join your friends using a room code
+                  </p>
+                </div>
+              </Card>
+
+              <Card 
+                className="p-8 shadow-floating bg-gradient-card border-glass backdrop-blur-sm cursor-pointer hover:scale-105 transition-spring group"
+                onClick={() => setSelectedOption("custom")}
+              >
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-gradient-main rounded-full flex items-center justify-center mx-auto mb-6 group-hover:shadow-glow transition-all">
+                    <GamepadIcon className="w-8 h-8 text-white" />
+                  </div>
+                  <h2 className="text-2xl font-bold mb-4">Custom</h2>
+                  <p className="text-muted-foreground">
+                    Local 2-player mode on the same device with custom player names
                   </p>
                 </div>
               </Card>
@@ -352,6 +410,27 @@ export const PlayOptions = () => {
                   disabled={loading}
                 >
                   {loading ? "Creating room..." : "Create Room"}
+                </Button>
+              </div>
+            </Card>
+          )}
+
+          {selectedOption === "custom" && (
+            <Card className="p-8 shadow-floating bg-gradient-card border-glass backdrop-blur-sm animate-scale-in">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-gradient-main rounded-full flex items-center justify-center mx-auto mb-6 shadow-glow">
+                  <GamepadIcon className="w-8 h-8 text-white" />
+                </div>
+                <h2 className="text-3xl font-bold mb-4">Custom Mode</h2>
+                <p className="text-muted-foreground mb-8">
+                  Set up a local 2-player drawing session on the same device
+                </p>
+                
+                <Button
+                  onClick={() => navigate("/play/custom")}
+                  className="bg-gradient-main hover:shadow-glow transition-spring hover:scale-105 px-8 py-3 text-lg"
+                >
+                  Start Custom Session
                 </Button>
               </div>
             </Card>

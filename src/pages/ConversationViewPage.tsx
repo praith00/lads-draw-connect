@@ -54,7 +54,7 @@ export const ConversationViewPage = () => {
           participants,
           started_at,
           ended_at,
-          rooms!inner (
+          rooms (
             room_code
           )
         `)
@@ -73,7 +73,7 @@ export const ConversationViewPage = () => {
 
       setConversation({
         ...conversationData,
-        room_code: (conversationData as any).rooms?.room_code || 'Unknown'
+        room_code: (conversationData as any).rooms?.room_code || ((conversationData.participants as any)?.mode === 'custom' ? 'CUSTOM' : 'N/A')
       });
 
       // Get doodles

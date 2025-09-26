@@ -37,7 +37,7 @@ export const HistoryPageNew = () => {
           participants,
           started_at,
           ended_at,
-          rooms!inner (
+          rooms (
             room_code
           )
         `)
@@ -58,7 +58,7 @@ export const HistoryPageNew = () => {
           return {
             ...conv,
             doodle_count: count || 0,
-            room_code: (conv as any).rooms?.room_code || 'Unknown'
+            room_code: (conv as any).rooms?.room_code || ((conv.participants as any)?.mode === 'custom' ? 'CUSTOM' : 'N/A')
           };
         })
       );
