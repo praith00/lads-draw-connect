@@ -20,7 +20,7 @@ export type Database = {
           ended_at: string | null
           id: string
           participants: Json
-          room_id: string
+          room_id: string | null
           started_at: string
           status: string
         }
@@ -29,7 +29,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           participants: Json
-          room_id: string
+          room_id?: string | null
           started_at?: string
           status?: string
         }
@@ -38,7 +38,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           participants?: Json
-          room_id?: string
+          room_id?: string | null
           started_at?: string
           status?: string
         }
