@@ -27,7 +27,7 @@ export const HomePage = ({ onLogout }: HomePageProps) => {
   };
 
   const handlePlay = () => {
-    navigate("/play");
+    navigate("/play-options");
   };
 
   const handleAccountDetails = () => {

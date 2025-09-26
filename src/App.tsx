@@ -5,53 +5,62 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Session } from "@supabase/supabase-js";
 
-import { LoginPage } from "@/components/Auth/LoginPage";
-import { RegisterPage } from "@/components/Auth/RegisterPage";
+import { AuthPage } from "@/components/Auth/AuthPage";
 import { HomePage } from "@/pages/HomePage";
-import { PlayPage } from "@/pages/PlayPage";
+import { PlayPageWithRoom } from "@/pages/PlayPageWithRoom";
+import { PlayOptions } from "@/components/PlayOptions";
 import { AccountPage } from "@/pages/AccountPage";
-import { HistoryPage } from "@/pages/HistoryPage";
+import { HistoryPageNew } from "@/pages/HistoryPageNew";
+import { ConversationViewPage } from "@/pages/ConversationViewPage";
+import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Check current auth status
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session);
+      setSession(session);
+      setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAuthenticated(!!session);
+      setSession(session);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleLogin = () => {
-    setIsAuthenticated(true);
+  const handleAuthSuccess = () => {
+    // Session will be updated automatically via auth state change listener
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
   };
 
   // Loading state
-  if (isAuthenticated === null) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="text-muted-foreground mt-4">Loading Lads...</p>
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary shadow-glow"></div>
+          <p className="text-muted-foreground mt-4 text-xl">Loading BaliLads...</p>
         </div>
       </div>
     );
   }
+
+  const isAuthenticated = !!session;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -63,15 +72,16 @@ const App = () => {
             {isAuthenticated ? (
               <>
                 <Route path="/" element={<HomePage onLogout={handleLogout} />} />
-                <Route path="/play" element={<PlayPage />} />
+                <Route path="/play-options" element={<PlayOptions />} />
+                <Route path="/play/:roomCode" element={<PlayPageWithRoom />} />
                 <Route path="/account" element={<AccountPage />} />
-                <Route path="/history" element={<HistoryPage />} />
+                <Route path="/history" element={<HistoryPageNew />} />
+                <Route path="/history/:conversationId" element={<ConversationViewPage />} />
               </>
             ) : (
               <>
-                <Route path="/" element={<LoginPage onLogin={handleLogin} />} />
-                <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-                <Route path="/register" element={<RegisterPage onRegister={handleLogin} />} />
+                <Route path="/" element={<Index />} />
+                <Route path="/auth" element={<AuthPage onAuthSuccess={handleAuthSuccess} />} />
               </>
             )}
             <Route path="*" element={<NotFound />} />
